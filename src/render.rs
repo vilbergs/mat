@@ -457,32 +457,49 @@ impl Renderer<'_> {
             }
             return;
         }
-        let border = Style::fg(8);
-        let label = if lang.is_empty() { String::new() } else { format!("─ {lang} ") };
-        let top = format!("╭{label}{}", "─".repeat(self.avail().saturating_sub(label.width() + 1).min(40)));
-        self.emit_line(vec![(top, border.clone())]);
-
         let theme = THEMES.get(&self.opts.theme).or_else(|| THEMES.get("ansi")).expect("bundled theme");
         let syntax = SYNTAXES
             .find_syntax_by_token(lang)
             .unwrap_or_else(|| SYNTAXES.find_syntax_plain_text());
         let mut hl = HighlightLines::new(syntax, theme);
-        for line in LinesWithEndings::from(&code) {
-            let mut frags = vec![("│ ".to_string(), border.clone())];
-            match hl.highlight_line(line, &SYNTAXES) {
-                Ok(ranges) => {
-                    for (st, text) in ranges {
-                        let text = text.trim_end_matches(['\n', '\r']);
-                        if !text.is_empty() {
-                            push_frag(&mut frags, text, &syntect_style(st));
+        let lines: Vec<Line> = LinesWithEndings::from(&code)
+            .map(|line| {
+                let mut frags = Vec::new();
+                match hl.highlight_line(line, &SYNTAXES) {
+                    Ok(ranges) => {
+                        for (st, text) in ranges {
+                            let text = text.trim_end_matches(['\n', '\r']);
+                            if !text.is_empty() {
+                                push_frag(&mut frags, text, &syntect_style(st));
+                            }
                         }
                     }
+                    Err(_) => push_frag(&mut frags, line.trim_end(), &Style::default()),
                 }
-                Err(_) => push_frag(&mut frags, line.trim_end(), &Style::default()),
+                frags
+            })
+            .collect();
+
+        // A box hugging the widest line, at most the available width. Lines too
+        // long for it run past the right edge rather than being wrapped, so the
+        // code survives copy and paste.
+        let border = Style::fg(8);
+        let label = if lang.is_empty() { String::new() } else { format!("─ {lang} ") };
+        let widest = lines.iter().map(|l| width_of(l)).max().unwrap_or(0);
+        let inner = widest.max(label.width()).min(self.avail().saturating_sub(4));
+        let top = format!("╭{label}{}╮", "─".repeat((inner + 2).saturating_sub(label.width())));
+        self.emit_line(vec![(top, border.clone())]);
+        for content in lines {
+            let w = width_of(&content);
+            let mut line = vec![("│ ".to_string(), border.clone())];
+            line.extend(content);
+            if w <= inner {
+                push_frag(&mut line, &" ".repeat(inner - w + 1), &Style::default());
+                push_frag(&mut line, "│", &border);
             }
-            self.emit_line(frags);
+            self.emit_line(line);
         }
-        self.emit_line(vec![("╰".to_string() + &"─".repeat(3), border)]);
+        self.emit_line(vec![(format!("╰{}╯", "─".repeat(inner + 2)), border)]);
     }
 
     fn render_table(&mut self, table: Table) {
