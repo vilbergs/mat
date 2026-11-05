@@ -28,11 +28,16 @@ default code theme, `ansi`, does the same.
 -w, --width <WIDTH>   Wrap width in columns [default: terminal width, at most 100]
     --color <WHEN>    auto | always | never  [default: auto]
 -t, --theme <THEME>   Code highlighting theme [default: ansi]
+-p, --paging <WHEN>   auto | always | never  [default: auto]
+-P                    Alias for --paging never
     --list-themes     List the available code themes
 ```
 
-Colors are turned off when stdout isn't a terminal or `NO_COLOR` is set. Use
-`--color always` when piping into `less -R`.
+Like `bat`, output to a terminal opens in a pager: `$MAT_PAGER`, then `$PAGER`,
+then `less`. A bare `less` runs as `less -RF`, so output that fits on one screen
+prints without paging. When stdout isn't a terminal, mat doesn't page.
+
+Colors are turned off when stdout isn't a terminal or `NO_COLOR` is set.
 
 ## Install
 
